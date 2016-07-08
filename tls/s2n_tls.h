@@ -39,6 +39,8 @@ extern int s2n_client_key_send(struct s2n_connection *conn);
 extern int s2n_client_key_recv(struct s2n_connection *conn);
 extern int s2n_client_ccs_send(struct s2n_connection *conn);
 extern int s2n_client_ccs_recv(struct s2n_connection *conn);
+extern int s2n_server_nst_send(struct s2n_connection *conn);
+extern int s2n_server_nst_recv(struct s2n_connection *conn);
 extern int s2n_server_ccs_send(struct s2n_connection *conn);
 extern int s2n_server_ccs_recv(struct s2n_connection *conn);
 extern int s2n_client_finished_send(struct s2n_connection *conn);
@@ -58,3 +60,6 @@ extern int s2n_server_extensions_recv(struct s2n_connection *conn, struct s2n_bl
 #define s2n_server_can_send_ocsp(conn) ((conn)->status_type == S2N_STATUS_REQUEST_OCSP && \
         (conn)->config->cert_and_key_pairs && \
         (conn)->config->cert_and_key_pairs->ocsp_status.size > 0)
+#define s2n_server_sending_nst(conn) ((conn)->config->use_tickets && \
+        ((conn)->session_ticket_status == S2N_EXPECTING_NEW_TICKET || \
+         (conn)->session_ticket_status == S2N_RENEW_TICKET))

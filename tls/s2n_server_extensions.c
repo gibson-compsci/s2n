@@ -29,6 +29,7 @@
 
 static int s2n_recv_server_alpn(struct s2n_connection *conn, struct s2n_stuffer *extension);
 static int s2n_recv_server_status_request(struct s2n_connection *conn, struct s2n_stuffer *extension);
+static int s2n_recv_server_session_ticket_ext(struct s2n_connection *conn, struct s2n_stuffer *extension);
 
 int s2n_server_extensions_send(struct s2n_connection *conn, struct s2n_stuffer *out)
 {
@@ -44,6 +45,9 @@ int s2n_server_extensions_send(struct s2n_connection *conn, struct s2n_stuffer *
     }
     if (conn->secure_renegotiation) {
         total_size += 5;
+    }
+    if (s2n_server_sending_nst(conn)) {
+        total_size += 4;
     }
 
     if (total_size == 0) {
@@ -73,6 +77,12 @@ int s2n_server_extensions_send(struct s2n_connection *conn, struct s2n_stuffer *
     /* Write OCSP extension */
     if (s2n_server_can_send_ocsp(conn)) {
         GUARD(s2n_stuffer_write_uint16(out, TLS_EXTENSION_STATUS_REQUEST));
+        GUARD(s2n_stuffer_write_uint16(out, 0));
+    }
+
+    /* Write session ticket extension */
+    if (s2n_server_sending_nst(conn)) {
+        GUARD(s2n_stuffer_write_uint16(out, TLS_EXTENSION_SESSION_TICKET));
         GUARD(s2n_stuffer_write_uint16(out, 0));
     }
 
@@ -107,6 +117,9 @@ int s2n_server_extensions_recv(struct s2n_connection *conn, struct s2n_blob *ext
             break;
         case TLS_EXTENSION_STATUS_REQUEST:
             GUARD(s2n_recv_server_status_request(conn, &extension));
+            break;
+        case TLS_EXTENSION_SESSION_TICKET:
+            GUARD(s2n_recv_server_session_ticket_ext(conn, &extension));
             break;
         }
     }
@@ -143,3 +156,9 @@ int s2n_recv_server_status_request(struct s2n_connection *conn, struct s2n_stuff
     return 0;
 }
 
+int s2n_recv_server_session_ticket_ext(struct s2n_connection *conn, struct s2n_stuffer *extension)
+{
+    conn->session_ticket_status = S2N_EXPECTING_NEW_TICKET;
+
+    return 0;
+}
