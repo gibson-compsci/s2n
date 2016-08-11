@@ -15,13 +15,19 @@
 
 #pragma once
 
+#include "tls/s2n_resume.h"
+
 #include "crypto/s2n_rsa.h"
 #include "crypto/s2n_dhe.h"
 
 #include "utils/s2n_blob.h"
 #include "api/s2n.h"
 
-#define S2N_MAX_SERVER_NAME 256
+#define S2N_MAX_SERVER_NAME       256
+#define S2N_MAX_TICKET_KEYS       48
+/* 1 MB stores 50,000 key hashes, which lasts about 5.5 years
+ * assuming 1 new key per hour */
+#define S2N_MAX_TICKET_KEY_HASHES 50000 
 
 struct s2n_cert_chain {
     struct s2n_blob cert;
@@ -54,6 +60,12 @@ struct s2n_config {
 
     int (*cache_delete) (void *data, const void *key, uint64_t key_size);
     void *cache_delete_data;
+
+    uint8_t use_tickets;
+    struct s2n_ticket_key ticket_keys[S2N_MAX_TICKET_KEYS*2];
+    uint8_t num_prepped_ticket_keys;
+    uint8_t ticket_key_hashes[S2N_MAX_TICKET_KEY_HASHES];
+    uint8_t total_uses_ticket_keys;
 };
 
 extern struct s2n_config s2n_default_config;
