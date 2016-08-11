@@ -181,10 +181,14 @@ int s2n_encrypt_session_ticket(struct s2n_connection *conn, struct s2n_stuffer *
 {
     struct s2n_ticket_key *key = NULL;
     struct s2n_session_key aes_ticket_key;
-    struct s2n_blob aes_key_blob, aad_blob;
+    struct s2n_blob aes_key_blob;
 
     uint8_t iv_data[S2N_TLS_GCM_IV_LEN] = { 0 };
     struct s2n_blob iv = { .data = iv_data, .size = sizeof(iv_data) };
+
+    uint8_t aad_data[S2N_TICKET_AAD_LEN] = { 0 };
+    struct s2n_blob aad_blob = { .data = aad_data, .size = sizeof(aad_data) };
+    struct s2n_stuffer aad;
 
     uint8_t s_data[S2N_STATE_SIZE_IN_BYTES + S2N_TLS_GCM_TAG_LEN] = { 0 };
     struct s2n_blob state_blob = { .data = s_data, .size = sizeof(s_data) };
@@ -205,7 +209,10 @@ int s2n_encrypt_session_ticket(struct s2n_connection *conn, struct s2n_stuffer *
     GUARD(s2n_aes256_gcm.init(&aes_ticket_key));
     GUARD(s2n_aes256_gcm.get_encryption_key(&aes_ticket_key, &aes_key_blob));
 
-    s2n_blob_init(&aad_blob, key->aad, S2N_TLS_GCM_AAD_LEN);
+    GUARD(s2n_stuffer_init(&aad, &aad_blob));
+    GUARD(s2n_stuffer_write_bytes(&aad, key->implicit_aad, S2N_TICKET_AAD_IMPLICIT_LEN));
+    GUARD(s2n_stuffer_write_bytes(&aad, key->key_name, S2N_TICKET_KEY_NAME_LEN));
+    /* Possibly write the expiration time into the aad for auth as well */
 
     GUARD(s2n_stuffer_init(&state, &state_blob));
     GUARD(s2n_serialize_resumption_state(conn, &state));
@@ -221,12 +228,16 @@ int s2n_decrypt_session_ticket(struct s2n_connection *conn, struct s2n_stuffer *
 {
     struct s2n_ticket_key *key = NULL;
     struct s2n_session_key aes_ticket_key;
-    struct s2n_blob aes_key_blob, aad_blob;
+    struct s2n_blob aes_key_blob;
 
     uint8_t key_name[S2N_TICKET_KEY_NAME_LEN];
 
     uint8_t iv_data[S2N_TLS_GCM_IV_LEN] = { 0 };
     struct s2n_blob iv = { .data = iv_data, .size = sizeof(iv_data) };
+
+    uint8_t aad_data[S2N_TICKET_AAD_LEN] = { 0 };
+    struct s2n_blob aad_blob = { .data = aad_data, .size = sizeof(aad_data) };
+    struct s2n_stuffer aad;
 
     uint8_t s_data[S2N_STATE_SIZE_IN_BYTES] = { 0 };
     struct s2n_blob state_blob = { .data = s_data, .size = sizeof(s_data) };
@@ -240,8 +251,7 @@ int s2n_decrypt_session_ticket(struct s2n_connection *conn, struct s2n_stuffer *
     key = s2n_find_ticket_key(conn->config, key_name);
     if (!key) {
         /* Key no longer valid; do full handshake with NST */
-        conn->session_ticket_status = S2N_EXPECTING_NEW_TICKET;
-        return 0;
+        return -1;
     }
 
     GUARD(s2n_stuffer_read(from, &iv));
@@ -250,7 +260,10 @@ int s2n_decrypt_session_ticket(struct s2n_connection *conn, struct s2n_stuffer *
     GUARD(s2n_aes256_gcm.init(&aes_ticket_key));
     GUARD(s2n_aes256_gcm.get_decryption_key(&aes_ticket_key, &aes_key_blob));
 
-    s2n_blob_init(&aad_blob, key->aad, S2N_TLS_GCM_AAD_LEN);
+    GUARD(s2n_stuffer_init(&aad, &aad_blob));
+    GUARD(s2n_stuffer_write_bytes(&aad, key->implicit_aad, S2N_TICKET_AAD_IMPLICIT_LEN));
+    GUARD(s2n_stuffer_write_bytes(&aad, key->key_name, S2N_TICKET_KEY_NAME_LEN));
+    /* Possibly write the expiration time into the add for auth as well */
 
     GUARD(s2n_stuffer_read(from, &en_blob));
 

@@ -508,7 +508,7 @@ int s2n_config_add_ticket_crypto_key(struct s2n_config *config,
         return -1;
     }
 
-    uint8_t output_pad[S2N_AES256_KEY_LEN + S2N_TLS_GCM_AAD_LEN];
+    uint8_t output_pad[S2N_AES256_KEY_LEN + S2N_TICKET_AAD_IMPLICIT_LEN];
     struct s2n_blob out_key = { .data = output_pad, .size = sizeof(output_pad) };
     struct s2n_blob in_key = { .data = key, .size = key_len };
     struct s2n_blob salt = { .size = 0 };
@@ -543,10 +543,10 @@ int s2n_config_add_ticket_crypto_key(struct s2n_config *config,
      * config->total_used_ticket_keys = (config->total_used_ticket_keys + 1) % S2N_MAX_TICKET_KEY_HASHES;
      */
 
-    memcpy_check(session_ticket_key->key_name, name, 16);
+    memcpy_check(session_ticket_key->key_name, name, S2N_TICKET_KEY_NAME_LEN);
     memcpy_check(session_ticket_key->aes_key, out_key.data, S2N_AES256_KEY_LEN);
     out_key.data = output_pad + S2N_AES256_KEY_LEN;
-    memcpy_check(session_ticket_key->aad, out_key.data, S2N_TLS_GCM_AAD_LEN);
+    memcpy_check(session_ticket_key->implicit_aad, out_key.data, S2N_TICKET_AAD_IMPLICIT_LEN);
     /* We do not check for expiration yet.
      * session_ticket_key.expiration = expire_time;
      */

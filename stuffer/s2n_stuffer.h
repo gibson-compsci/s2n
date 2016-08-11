@@ -92,7 +92,7 @@ extern int s2n_stuffer_write_uint64(struct s2n_stuffer *stuffer, const uint64_t 
 extern int s2n_stuffer_copy(struct s2n_stuffer *from, struct s2n_stuffer *to, uint32_t len);
 
 /* Print the available data (in hex) */
-extern int s2n_stuffer_print_availabe(struct s2n_stuffer *stuffer);
+extern int s2n_stuffer_print_available(struct s2n_stuffer *stuffer);
 
 /* Read and write base64 */
 extern int s2n_stuffer_read_base64(struct s2n_stuffer *stuffer, struct s2n_stuffer *out);
