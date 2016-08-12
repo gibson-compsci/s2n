@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <time.h>
 
 #include <errno.h>
 
@@ -50,7 +51,9 @@ static char certificate[] =
     "WbyxPJNtSlA9GfKBz1INR5cFsOL27VrBoMYHMaolveeslc1AW2HfBtXWXeWSEF7F\n"
     "QNgye8ZDPNzeSWSI0VyK2762wsTgTuUhHAaJ45660eX57+e8IvaM7xOEfBPDKYtU\n"
     "0a28ZuhvSr2akJtGCwcs2J6rs6I+rV84UktDxFC9LUezBo8D9FkMPLoPKKNH1dXR\n"
-    "6LO8GOkqWUrhPIEmfy9KYes3q2ZX6svk4rwBtommHRv30kPxnnU1YXt52Ri+XczO\n" "wEs=\n" "-----END CERTIFICATE-----\n";
+    "6LO8GOkqWUrhPIEmfy9KYes3q2ZX6svk4rwBtommHRv30kPxnnU1YXt52Ri+XczO\n"
+    "wEs=\n"
+    "-----END CERTIFICATE-----\n";
 
 static char private_key[] =
     "-----BEGIN RSA PRIVATE KEY-----\n"
@@ -77,7 +80,9 @@ static char private_key[] =
     "pRsovQKpiHQNgHizkwM861GqqrfisZZSyKfFlcynkACoVmyu7fv9VoD2VCMiqdUq\n"
     "IvjNmfE5RnXVQwja+668AS+MHi+GF77DTFBxoC5VHDAnXfLyIL9WWh9GEBoNLnKT\n"
     "hVm8RQKBgQCB9Skzdftc+14a4Vj3NCgdHZHz9mcdPhzJXUiQyZ3tYhaytX9E8mWq\n"
-    "pm/OFqahbxw6EQd86mgANBMKayD6B1Id1INqtXN1XYI50bSs1D2nOGsBM7MK9aWD\n" "JXlJ2hwsIc4q9En/LR3GtBaL84xTHGfznNylNhXi7GbO1wNMJuAukA==\n" "-----END RSA PRIVATE KEY-----\n";
+    "pm/OFqahbxw6EQd86mgANBMKayD6B1Id1INqtXN1XYI50bSs1D2nOGsBM7MK9aWD\n"
+    "JXlJ2hwsIc4q9En/LR3GtBaL84xTHGfznNylNhXi7GbO1wNMJuAukA==\n"
+    "-----END RSA PRIVATE KEY-----\n";
 
 static char dhparams[] =
     "-----BEGIN DH PARAMETERS-----\n"
@@ -85,10 +90,13 @@ static char dhparams[] =
     "Bbn6k0FQ7yMED6w5XWQKDC0z2m0FI/BPE3AjUfuPzEYGqTDf9zQZ2Lz4oAN90Sud\n"
     "luOoEhYR99cEbCn0T4eBvEf9IUtczXUZ/wj7gzGbGG07dLfT+CmCRJxCjhrosenJ\n"
     "gzucyS7jt1bobgU66JKkgMNm7hJY4/nhR5LWTCzZyzYQh2HM2Vk4K5ZqILpj/n0S\n"
-    "5JYTQ2PVhxP+Uu8+hICs/8VvM72DznjPZzufADipjC7CsQ4S6x/ecZluFtbb+ZTv\n" "HI5CnYmkAwJ6+FSWGaZQDi8bgerFk9RWwwIBAg==\n" "-----END DH PARAMETERS-----\n";
+    "5JYTQ2PVhxP+Uu8+hICs/8VvM72DznjPZzufADipjC7CsQ4S6x/ecZluFtbb+ZTv\n"
+    "HI5CnYmkAwJ6+FSWGaZQDi8bgerFk9RWwwIBAg==\n"
+    "-----END DH PARAMETERS-----\n";
 
 #define MAX_KEY_LEN 32
 #define MAX_VAL_LEN 255
+#define KEY_EXPIRATION_IN_NANOS 60000000000
 
 struct session_cache_entry {
     uint8_t key[MAX_KEY_LEN];
@@ -194,6 +202,10 @@ void usage()
     fprintf(stderr, "  -n\n");
     fprintf(stderr, "  --negotiate\n");
     fprintf(stderr, "    Only perform tls handshake and then shutdown the connection\n");
+    fprintf(stderr, "  --no_sess_cache\n");
+    fprintf(stderr, "    Do not use session caching to resume\n");
+    fprintf(stderr, "  --no_sess_tickets\n");
+    fprintf(stderr, "    Do not support session tickets for resumption\n");
     fprintf(stderr, "  -h,--help\n");
     fprintf(stderr, "    Display this message and quit.\n");
 
@@ -205,20 +217,25 @@ int main(int argc, char *const *argv)
     struct addrinfo hints, *ai;
     int r, sockfd = 0;
 
+
     /* required args */
     const char *host = NULL;
     const char *port = NULL;
 
     const char *cipher_prefs = "default";
     int only_negotiate = 0;
+    int session_caching = 1;
+    int session_tickets = 1;
 
     static struct option long_options[] = {
         {"help", no_argument, 0, 'h'},
         {"ciphers", required_argument, 0, 'c'},
+        {"no_sess_cache", no_argument, 0, 's'},
+        {"no_sess_tickets", no_argument, 0, 't'},
     };
     while (1) {
         int option_index = 0;
-        int c = getopt_long(argc, argv, "c:hn", long_options, &option_index);
+        int c = getopt_long(argc, argv, "c:hstn", long_options, &option_index);
         if (c == -1) {
             break;
         }
@@ -231,6 +248,12 @@ int main(int argc, char *const *argv)
             break;
         case 'n':
             only_negotiate = 1;
+            break;
+        case 's':
+            session_caching = 0;
+            break;
+        case 't':
+            session_tickets = 0;
             break;
         case '?':
         default:
@@ -323,20 +346,43 @@ int main(int argc, char *const *argv)
         exit(1);
     }
 
-    if (s2n_config_set_cache_store_callback(config, cache_store, session_cache) < 0) {
-        fprintf(stderr, "Error setting cache store callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
-        exit(1);
+    if (session_tickets) {
+        /* Key initialization */
+        const unsigned char tick_key_name[16] = "2016.07.26.15\0";
+        uint8_t tick_key[32] = {0x07, 0x77, 0x09, 0x36, 0x2c, 0x2e, 0x32, 0xdf, 0x0d, 0xdc,
+                0x3f, 0x0d, 0xc4, 0x7b, 0xba, 0x63, 0x90, 0xb6, 0xc7, 0x3b,
+                0xb5, 0x0f, 0x9c, 0x31, 0x22, 0xec, 0x84, 0x4a, 0xd7, 0xc2,
+                0xb3, 0xe5 };
+        uint64_t expire_time = KEY_EXPIRATION_IN_NANOS;
+
+        if (s2n_config_add_ticket_crypto_key(config, tick_key_name, sizeof(tick_key_name), tick_key, sizeof(tick_key), expire_time) != 0) {
+            fprintf(stderr, "Error adding ticket key: '%s'\n", s2n_strerror(s2n_errno, "EN"));
+            exit(1);
+        }
+    } else {
+        if (s2n_config_disable_session_tickets(config) < 0) {
+            fprintf(stderr, "Error disabling session tickets: '%s'\n", s2n_strerror(s2n_errno, "EN"));
+            exit(1);
+        }
     }
 
-    if (s2n_config_set_cache_retrieve_callback(config, cache_retrieve, session_cache) < 0) {
-        fprintf(stderr, "Error setting cache retrieve callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
-        exit(1);
+    if (session_caching) {
+        if (s2n_config_set_cache_store_callback(config, cache_store, session_cache) < 0) {
+            fprintf(stderr, "Error setting cache store callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
+            exit(1);
+        }
+
+        if (s2n_config_set_cache_retrieve_callback(config, cache_retrieve, session_cache) < 0) {
+            fprintf(stderr, "Error setting cache retrieve callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
+            exit(1);
+        }
+
+        if (s2n_config_set_cache_delete_callback(config, cache_delete, session_cache) < 0) {
+            fprintf(stderr, "Error setting cache retrieve callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
+            exit(1);
+        }
     }
 
-    if (s2n_config_set_cache_delete_callback(config, cache_delete, session_cache) < 0) {
-        fprintf(stderr, "Error setting cache retrieve callback: '%s'\n", s2n_strerror(s2n_errno, "EN"));
-        exit(1);
-    }
 
     struct s2n_connection *conn = s2n_connection_new(S2N_SERVER);
     if (!conn) {
