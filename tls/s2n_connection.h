@@ -36,6 +36,14 @@
 
 #define S2N_TLS_PROTOCOL_VERSION_LEN    2
 
+typedef enum {
+    S2N_NO_TICKET = 0,
+    S2N_EXPECTING_NEW_TICKET,
+    S2N_ATTEMPT_DECRYPT_TICKET,
+    S2N_RENEW_TICKET,
+    S2N_RECEIVED_VALID_TICKET
+} s2n_session_ticket_status;
+
 struct s2n_connection {
     /* The configuration (cert, key .. etc ) */
     struct s2n_config *config;
@@ -156,6 +164,16 @@ struct s2n_connection {
     /* OCSP stapling response data */
     s2n_status_request_type status_type;
     struct s2n_blob status_response;
+
+    /* Session ticket data */
+    s2n_session_ticket_status session_ticket_status;
+    struct s2n_blob client_ticket;
+    struct s2n_blob client_ticket_pending;
+    /* Session ticket extension from client
+     * to attempt to decrypt as the server.
+     */
+    uint8_t tick_ext_data[S2N_TICKET_SIZE_IN_BYTES];
+    struct s2n_stuffer client_tick_to_decrypt;
 };
 
 /* Kill a bad connection */
