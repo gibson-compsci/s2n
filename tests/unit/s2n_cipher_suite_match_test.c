@@ -263,21 +263,22 @@ int main(int argc, char **argv)
         EXPECT_SUCCESS(s2n_config_free(server_config));
 
         /* TEST two certificates. Use two certs with different key types(RSA, ECDSA) and add them to a single
-         * s2n_config.
+         * s2n_config. RSA cert is added first as the default certificate.
          */
         EXPECT_NOT_NULL(server_config = s2n_config_new());
         EXPECT_SUCCESS(s2n_config_add_cert_chain_and_key_to_store(server_config, rsa_cert));
         EXPECT_SUCCESS(s2n_config_add_cert_chain_and_key_to_store(server_config, ecdsa_cert));
 
-        /* Client sends RSA and ECDSA ciphers, server prioritizes ECDSA, ECDSA + RSA cert is configured */
+        /* Client sends RSA and ECDSA ciphers, server prioritizes ECDSA, ECDSA + RSA cert is configured.
+         * Default RSA cert used. */
         {
-            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 };
+            const uint8_t expected_wire_choice[] = { TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA };
             s2n_connection_set_cipher_preferences(conn, "test_ecdsa_priority");
             conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
             EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
             EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_with_ecdsa, cipher_count_ecdsa));
             EXPECT_EQUAL(conn->secure_renegotiation, 0);
-            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
+            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, rsa_cert);
             EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
             EXPECT_SUCCESS(s2n_connection_wipe(conn));
         }
@@ -311,21 +312,6 @@ int main(int argc, char **argv)
             EXPECT_SUCCESS(s2n_connection_wipe(conn));
         }
 
-        /* Client sends both RSA and ECDSA ciphers, server only configures ECDSA ciphers, ECDSA + RSA cert is
-         * configured.
-         */
-        {
-            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 };
-            s2n_connection_set_cipher_preferences(conn, "test_all_ecdsa");
-            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
-            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
-            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_with_ecdsa, cipher_count_ecdsa));
-            EXPECT_EQUAL(conn->secure_renegotiation, 0);
-            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
-            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
-            EXPECT_SUCCESS(s2n_connection_wipe(conn));
-        }
-
         /* Client only sends RSA ciphers, server prioritizes ECDSA ciphers, ECDSA + RSA cert is
          * configured.
          */
@@ -337,21 +323,6 @@ int main(int argc, char **argv)
             EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers, cipher_count));
             EXPECT_EQUAL(conn->secure_renegotiation, 0);
             EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, rsa_cert);
-            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
-            EXPECT_SUCCESS(s2n_connection_wipe(conn));
-        }
-
-        /* Client only sends ECDSA ciphers, server prioritizes ECDSA ciphers, ECDSA + RSA cert is
-         * configured.
-         */
-        {
-            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA };
-            s2n_connection_set_cipher_preferences(conn, "test_ecdsa_priority");
-            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
-            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
-            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_only_ecdsa, cipher_count_only_ecdsa));
-            EXPECT_EQUAL(conn->secure_renegotiation, 0);
-            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
             EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
             EXPECT_SUCCESS(s2n_connection_wipe(conn));
         }
@@ -372,6 +343,69 @@ int main(int argc, char **argv)
             EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_rsa_fallback, cipher_count_rsa_fallback));
             EXPECT_EQUAL(conn->secure_renegotiation, 0);
             EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, rsa_cert);
+            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
+            EXPECT_SUCCESS(s2n_connection_wipe(conn));
+        }
+
+        /* Now use ECDSA as default certificate. RSA cert added second. */
+        EXPECT_SUCCESS(s2n_config_free(server_config));
+        EXPECT_NOT_NULL(server_config = s2n_config_new());
+        EXPECT_SUCCESS(s2n_config_add_cert_chain_and_key_to_store(server_config, ecdsa_cert));
+        EXPECT_SUCCESS(s2n_config_add_cert_chain_and_key_to_store(server_config, rsa_cert));
+
+        /* Client sends RSA and ECDSA ciphers, server prioritizes ECDSA, ECDSA + RSA cert configures. */
+        {
+            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 };
+            s2n_connection_set_cipher_preferences(conn, "test_ecdsa_priority");
+            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
+            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
+            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_with_ecdsa, cipher_count_ecdsa));
+            EXPECT_EQUAL(conn->secure_renegotiation, 0);
+            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
+            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
+            EXPECT_SUCCESS(s2n_connection_wipe(conn));
+        }
+
+        /* Client sends both RSA and ECDSA ciphers, server only configures ECDSA ciphers, ECDSA + RSA cert is
+         * configured.
+         */
+        {
+            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 };
+            s2n_connection_set_cipher_preferences(conn, "test_all_ecdsa");
+            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
+            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
+            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_with_ecdsa, cipher_count_ecdsa));
+            EXPECT_EQUAL(conn->secure_renegotiation, 0);
+            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
+            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
+            EXPECT_SUCCESS(s2n_connection_wipe(conn));
+        }
+
+        /* Client only sends ECDSA ciphers, server prioritizes ECDSA ciphers, ECDSA + RSA cert is
+         * configured.
+         */
+        {
+            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA };
+            s2n_connection_set_cipher_preferences(conn, "test_ecdsa_priority");
+            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
+            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
+            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_only_ecdsa, cipher_count_only_ecdsa));
+            EXPECT_EQUAL(conn->secure_renegotiation, 0);
+            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
+            EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
+            EXPECT_SUCCESS(s2n_connection_wipe(conn));
+        }
+
+        /* Client sends RSA and ECDSA ciphers, server prioritizes RSA ciphers, ECDSA + RSA cert configured.
+         * Default ECDSA used. */
+        {
+            const uint8_t expected_wire_choice[] = { TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 };
+            s2n_connection_set_cipher_preferences(conn, "test_all");
+            conn->secure.server_ecc_params.negotiated_curve = &s2n_ecc_supported_curves[0];
+            EXPECT_SUCCESS(s2n_connection_set_config(conn, server_config));
+            EXPECT_SUCCESS(s2n_set_cipher_and_cert_as_tls_server(conn, wire_ciphers_with_ecdsa, cipher_count_ecdsa));
+            EXPECT_EQUAL(conn->secure_renegotiation, 0);
+            EXPECT_EQUAL(conn->handshake_params.our_chain_and_key, ecdsa_cert);
             EXPECT_EQUAL(conn->secure.cipher_suite, s2n_cipher_suite_from_wire(expected_wire_choice));
             EXPECT_SUCCESS(s2n_connection_wipe(conn));
         }

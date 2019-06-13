@@ -939,17 +939,13 @@ static int s2n_cipher_is_compatible_with_cert(struct s2n_cipher_suite *cipher, s
     return 0;
 }
 
-/* Find the first certificate that is compatible with the authentication method for a given cipher suite. */
-static struct s2n_cert_chain_and_key *s2n_get_first_compatible_cert_chain_and_key(struct s2n_array *certs, struct s2n_cipher_suite *cipher_suite)
+/* Find the default cert that is compatible with the given cipher suite. */
+static struct s2n_cert_chain_and_key *s2n_get_default_compatible_cert_chain_and_key(struct s2n_cert_chain_and_key *default_cert, struct s2n_cipher_suite *cipher_suite)
 {
-    for (int i = 0; i < s2n_array_num_elements(certs); i++) {
-        struct s2n_cert_chain_and_key *cert_chain_and_key = *((struct s2n_cert_chain_and_key**) s2n_array_get(certs, i));
-        struct s2n_cert *leaf_cert = cert_chain_and_key->cert_chain->head;
-        uint8_t cert_compatibility = 0;
-        GUARD_PTR(s2n_cipher_is_compatible_with_cert(cipher_suite, leaf_cert, &cert_compatibility));
-        if (cert_compatibility) {
-            return cert_chain_and_key;
-        }
+    uint8_t cert_compatibility = 0;
+    GUARD_PTR(s2n_cipher_is_compatible_with_cert(cipher_suite, default_cert->cert_chain->head, &cert_compatibility));
+    if (cert_compatibility) {
+        return default_cert;
     }
 
     return NULL;
@@ -968,8 +964,8 @@ static struct s2n_cert_chain_and_key *s2n_conn_get_compatible_cert_chain_and_key
     } if (conn->handshake_params.wc_sni_match_exists) {
         return conn->handshake_params.wc_sni_matches[cipher_suite->auth_method];
     } else {
-        /* We don't have any name matches. Use the first certificate that works with the key type. */
-        return s2n_get_first_compatible_cert_chain_and_key(conn->config->cert_and_key_pairs, cipher_suite);
+        /* We don't have any name matches. Use the default certificate if it works with the key type. */
+        return s2n_get_default_compatible_cert_chain_and_key(conn->config->default_cert_chain_and_key, cipher_suite);
     }
 }
 

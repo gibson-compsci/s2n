@@ -426,6 +426,11 @@ int s2n_config_add_cert_chain_and_key_to_store(struct s2n_config *config, struct
     notnull_check(to_insert);
     *to_insert = cert_key_pair;
 
+    /* Regardless of cert key type, always set the first certificate added as the default */
+    if (s2n_array_num_elements(config->cert_and_key_pairs) == 1) {
+        config->default_cert_chain_and_key = cert_key_pair;
+    }
+
     return 0;
 }
 
